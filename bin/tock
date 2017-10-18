@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+
+BINPATH=`dirname $0`
+python "$BINPATH/../tocks/main.py" $@
