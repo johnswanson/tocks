@@ -46,18 +46,20 @@ class App:
         else:
             return False
 
-    def _done(self):
+    def _done(self, name):
         r = self.beeminder.post_datapoint('tocks', 45, name)
         if r.status_code == 200:
-            os.remove(self.name_file)
+            try:
+                os.remove(self.name_file)
+            except FileNotFoundError:
+                pass
 
     def done(self, args):
         (state, name) = self._state()
         if state == App.IN_PROGRESS:
             if self.d.yesno("Tock finished?\n\t{}".format(name), keep_tite=True) == self.d.DIALOG_OK:
-                self._done()
-            if self.d.yesno("Take a break?", keep_tite=True) == self.d.DIALOG_OK:
-                self._break()
+                self._done(name)
+            self.takebreak(args)
         else:
             exit("No tock in progress!")
 
@@ -75,14 +77,22 @@ class App:
             with open(self.touch_file, 'w') as f:
                 f.write('45 15')
 
-    def _break(self, minutes):
+    def _screenoff(self):
         get = subprocess.check_output(["xrandr"]).decode('utf-8').split()
         screens = [ get[i-1] for i in range(len(get)) if get[i] == 'connected']
         for scr in screens:
-            subprocess.call(["xrandr", "--output", scr, "--brightness", "0.5"])
-        time.sleep(60 * minutes)
+            subprocess.call(["xrandr", "--output", scr, "--brightness", "0"])
+
+    def _reset(self):
+        get = subprocess.check_output(["xrandr"]).decode('utf-8').split()
+        screens = [ get[i-1] for i in range(len(get)) if get[i] == 'connected']
         for scr in screens:
             subprocess.call(["xrandr", "--output", scr, "--brightness", "1"])
+
+    def _break(self, minutes):
+        self._screenoff()
+        time.sleep(60 * minutes)
+        self._reset()
 
     def takebreak(self, args):
         self.abort(args)
@@ -102,4 +112,7 @@ def main():
     parser.add_argument('name', nargs='*')
     args = parser.parse_args(sys.argv[1:])
     a = App(args)
-    getattr(a, args.command)(args)
+    try:
+        getattr(a, args.command)(args)
+    finally:
+        a._reset()
